@@ -14,13 +14,13 @@ import net.dongliu.requests.Response;
 import net.dongliu.requests.Session;
 import net.dongliu.requests.exception.RequestException;
 import net.dongliu.requests.struct.Cookie;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
-import java.util.*;
-
 import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 /**
  * Api客户端.
@@ -68,24 +68,22 @@ public class SmartQQClient implements Closeable {
         login();
         if (callback != null) {
             this.pollStarted = true;
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    while (true) {
-                        if (!pollStarted) {
-                            return;
-                        }
-                        try {
-                            pollMessage(callback);
-                        } catch (RequestException e) {
-                            //忽略SocketTimeoutException
-                            if (!(e.getCause() instanceof SocketTimeoutException)) {
-                                log.error(e.getMessage());
-                            }
-                        } catch (Exception e) {
-                            log.error(e.getMessage());
-                        }
+            new Thread(() -> {
+                while (true) {
+                    if (!pollStarted) {
+                        return;
                     }
+                    try {
+                        pollMessage(callback);
+                    } catch (RequestException e) {
+                        //忽略SocketTimeoutException
+                        if (!(e.getCause() instanceof SocketTimeoutException)) {
+                            log.error("pollMessage异常", e);
+                        }
+                    } catch (Exception e) {
+                        log.error("pollMessage其他异常", e);
+                    }
+                    sleep(500);
                 }
             }).start();
         }
@@ -150,7 +148,7 @@ public class SmartQQClient implements Closeable {
 
         //阻塞直到确认二维码认证成功
         while (true) {
-            sleep(1);
+            sleep(1000);
             Response<String> response = get(ApiURL.VERIFY_QR_CODE, hash33(qrsig));
             String result = response.getBody();
             if (result.contains("成功")) {
@@ -671,23 +669,27 @@ public class SmartQQClient implements Closeable {
     //检验Json返回结果
     private static JSONObject getResponseJson(Response<String> response) {
         if (response.getStatusCode() != 200) {
+            log.error("请求失败，Http返回码:{}", response.getStatusCode());
             throw new RequestException(String.format("请求失败，Http返回码[%d]", response.getStatusCode()));
         }
         JSONObject json = JSON.parseObject(response.getBody());
         Integer retCode = json.getInteger("retcode");
         if (retCode == null) {
-            throw new RequestException(String.format("请求失败，Api返回异常", retCode));
+            log.error("请求失败，Api返回异常", response.getStatusCode());
+            throw new RequestException("请求失败，Api返回异常");
         } else if (retCode != 0) {
             switch (retCode) {
                 case 103: {
-                    log.error("请求失败，Api返回码[103]。你需要进入http://w.qq.com，检查是否能正常接收消息。如果可以的话点击[设置]->[退出登录]后查看是否恢复正常");
+                    log.error("请求失败，Api返回码[103]。你需要进入http://w.qq.com，检查是否能正常接收消息。" +
+                            "如果可以的话点击[设置]->[退出登录]后查看是否恢复正常");
                     break;
                 }
                 case 100100: {
-                    log.debug("请求失败，Api返回码[100100]");
+                    log.error("请求失败，Api返回码[100100]");
                     break;
                 }
                 default: {
+                    log.error("请求失败，Api返回其他错误码：{}", retCode);
                     throw new RequestException(String.format("请求失败，Api返回码[%d]", retCode));
                 }
             }
@@ -701,9 +703,9 @@ public class SmartQQClient implements Closeable {
     }
 
     //线程暂停
-    private static void sleep(long seconds) {
+    private static void sleep(long millisSeconds) {
         try {
-            Thread.sleep(seconds * 1000);
+            Thread.sleep(millisSeconds);
         } catch (InterruptedException e) {
             //忽略InterruptedException
         }
