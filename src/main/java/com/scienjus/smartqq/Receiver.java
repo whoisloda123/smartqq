@@ -112,8 +112,8 @@ public class Receiver {
             log.info("[淘口令]抓取到淘口令，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls);
 
             RequestConfig requestConfig = RequestConfig.custom()
-                    .setSocketTimeout(7000)
-                    .setConnectTimeout(5000)
+                    .setSocketTimeout(10000)
+                    .setConnectTimeout(6000)
                     .build();
             HttpPost httpPost = new HttpPost("http://m.kujia.com/j/cn/api/taobao_watchword/add_goods");
             List<BasicNameValuePair> valuePairs = new ArrayList<>();
