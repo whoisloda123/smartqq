@@ -118,7 +118,7 @@ public class Receiver {
             HttpPost httpPost = new HttpPost("http://m.kujia.com/j/cn/api/taobao_watchword/add_goods");
             List<BasicNameValuePair> valuePairs = new ArrayList<>();
             valuePairs.add(new BasicNameValuePair("watchWord", tkls));
-            valuePairs.add(new BasicNameValuePair("user_name", String.format("系统（QQ群:%s(%s)）", group.getName(), group.getId())));
+            valuePairs.add(new BasicNameValuePair("user_name", String.format("系统（QQ群:%s）", group.getName())));
             httpPost.setEntity(new UrlEncodedFormEntity(valuePairs, "UTF-8"));
             httpPost.setConfig(requestConfig);
 
