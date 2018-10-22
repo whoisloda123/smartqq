@@ -5,6 +5,7 @@ import com.scienjus.smartqq.callback.MessageCallback;
 import com.scienjus.smartqq.client.SmartQQClient;
 import com.scienjus.smartqq.model.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -99,67 +100,53 @@ public class Receiver {
     private static void dealTkl(GroupMessage msg) throws Exception {
         Pattern pattern = Pattern.compile("￥[a-zA-Z0-9]*?￥");
         Matcher matcher = pattern.matcher(msg.getContent());
-        StringBuilder builder = new StringBuilder();
+        List<String> list = new ArrayList<>();
         while (matcher.find()) {
-            String tkl = matcher.group();
-            builder.append(tkl);
-            builder.append(",");
+            list.add(matcher.group());
         }
-        String tkls = builder.toString();
-        if (!tkls.isEmpty()) {
-            tkls = tkls.substring(0, tkls.length()-1);
-            Group group = getGroup(msg);
-            log.info("[淘口令]抓取到淘口令，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls);
+        if (CollectionUtils.isEmpty(list)) {
+            return;
+        }
+        String tkls = String.join(",", list);
+        Group group = getGroup(msg);
+        log.info("[淘口令]抓取到淘口令，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls);
 
-            RequestConfig requestConfig = RequestConfig.custom()
-                    .setSocketTimeout(10000)
-                    .setConnectTimeout(6000)
-                    .build();
-            HttpPost httpPost = new HttpPost("http://m.kujia.com/j/cn/api/taobao_watchword/add_goods");
-            List<BasicNameValuePair> valuePairs = new ArrayList<>();
-            valuePairs.add(new BasicNameValuePair("watchWord", tkls));
-            valuePairs.add(new BasicNameValuePair("user_name", String.format("系统（QQ群:%s）", group.getName())));
-            httpPost.setEntity(new UrlEncodedFormEntity(valuePairs, "UTF-8"));
-            httpPost.setConfig(requestConfig);
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setSocketTimeout(10000)
+                .setConnectTimeout(6000)
+                .build();
+        HttpPost httpPost = new HttpPost("http://m.kujia.com/j/cn/api/taobao_watchword/add_goods");
+        List<BasicNameValuePair> valuePairs = new ArrayList<>();
+        valuePairs.add(new BasicNameValuePair("watchWord", tkls));
+        valuePairs.add(new BasicNameValuePair("user_name", String.format("系统（QQ群:%s）", group.getName())));
+        httpPost.setEntity(new UrlEncodedFormEntity(valuePairs, "UTF-8"));
+        httpPost.setConfig(requestConfig);
 
-            CloseableHttpClient httpClient = HttpClients.createDefault();
-            CloseableHttpResponse response = null;
-
-            try {
-                int times = 0;
-                while (++times < 3) {
-                    response = httpClient.execute(httpPost);
-                    if (response.getStatusLine().getStatusCode() == 200) {
-                        String entity = EntityUtils.toString(response.getEntity());
-                        JSONObject jsonObject = JSONObject.parseObject(entity);
-                        if (jsonObject != null) {
-                            Integer statusCode = jsonObject.getInteger("statusCode");
-                            if (statusCode != null) {
-                                if (statusCode.equals(1)) {
-                                    log.info("[淘口令]上传淘口令成功，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls);
-                                    break;
-                                } else {
-                                    log.error("[淘口令]上传淘口令失败，times：{}，群id:{}, 群名称:{}, 淘口令:{}, errorMsg:{}",
-                                            times, group.getId(), group.getName(), tkls, jsonObject.getString("msg"));
-                                }
+        try (CloseableHttpClient httpClient = HttpClients.createDefault();
+             CloseableHttpResponse response = httpClient.execute(httpPost)) {
+            int times = 0;
+            while (++times < 3) {
+                if (response.getStatusLine().getStatusCode() == 200) {
+                    String entity = EntityUtils.toString(response.getEntity());
+                    JSONObject jsonObject = JSONObject.parseObject(entity);
+                    if (jsonObject != null) {
+                        Integer statusCode = jsonObject.getInteger("statusCode");
+                        if (statusCode != null) {
+                            if (statusCode.equals(1)) {
+                                log.info("[淘口令]上传淘口令成功，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls);
+                                break;
+                            } else {
+                                log.error("[淘口令]上传淘口令失败，times：{}，群id:{}, 群名称:{}, 淘口令:{}, errorMsg:{}",
+                                        times, group.getId(), group.getName(), tkls, jsonObject.getString("msg"));
                             }
                         }
-                    } else {
-                        log.error("[淘口令]上传淘口令失败，times:{},群id:{}, 群名称:{}, 淘口令:{}",
-                                times, group.getId(), group.getName(), tkls);
                     }
-                }
-            } catch (Exception e) {
-                log.error("[淘口令]上传淘口令异常，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls, e);
-
-            } finally {
-                if (httpClient != null) {
-                    httpClient.close();
-                }
-                if (response != null) {
-                    response.close();
+                } else {
+                    log.error("[淘口令]上传淘口令失败，times:{},群id:{}, 群名称:{}, 淘口令:{}", times, group.getId(), group.getName(), tkls);
                 }
             }
+        } catch (Exception e) {
+            log.error("[淘口令]上传淘口令异常，群id:{}, 群名称:{}, 淘口令:{}", group.getId(), group.getName(), tkls, e);
         }
     }
 
